@@ -8,7 +8,7 @@ import io.netty.util.AttributeKey;
 import net.jodah.expiringmap.ExpiringMap;
 import net.lenni0451.lambdaevents.EventHandler;
 import net.raphimc.netminecraft.constants.IntendedState;
-import net.raphimc.netminecraft.packet.IPacket;
+import net.raphimc.netminecraft.packet.Packet;
 import net.raphimc.netminecraft.packet.impl.handshaking.C2SHandshakingClientIntentionPacket;
 import net.raphimc.vialegacy.protocol.release.r1_6_4tor1_7_2_5.types.Types1_6_4;
 import net.raphimc.viaproxy.ViaProxy;
@@ -126,7 +126,7 @@ public class Main extends ViaProxyPlugin {
         } else {
             event.setHandler(new Client2ProxyHandler() {
                 @Override
-                protected void channelRead0(ChannelHandlerContext ctx, IPacket packet) throws Exception {
+                protected void channelRead0(ChannelHandlerContext ctx, Packet packet) throws Exception {
                     if (!ctx.channel().isOpen()) return;
                     if (packet instanceof C2SHandshakingClientIntentionPacket) {
                         C2SHandshakingClientIntentionPacket handshakePacket = (C2SHandshakingClientIntentionPacket) packet;
