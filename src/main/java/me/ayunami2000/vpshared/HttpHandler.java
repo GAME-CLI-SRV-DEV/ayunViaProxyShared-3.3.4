@@ -41,43 +41,15 @@ public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         webFolder.mkdirs();
     }
 
-    private static final File captchaFile = new File(webFolder, "captcha.html");
-    private static final File versionFile = new File(webFolder, "version.html");
-    private static final File configFile = new File(webFolder, "config.html");
     private static final File authFile = new File(webFolder, "auth.html");
-    private static final File deleteFile = new File(webFolder, "delete.html");
-    private static String captchaPage;
-    private static String versionPage;
-    private static String configPage;
     private static String authPage;
-    private static String deletePage;
 
     protected static void initFiles() {
         try {
-            if (!captchaFile.exists()) {
-                Files.copy(Objects.requireNonNull(HttpHandler.class.getResourceAsStream("/captcha.html")), captchaFile.toPath());
-            }
-            captchaPage = FileUtils.readFileToString(captchaFile, StandardCharsets.UTF_8).replaceAll("SITEKEYHERE", FunnyConfig.hCaptchaSiteKey);
-            if (!versionFile.exists()) {
-                Files.copy(Objects.requireNonNull(HttpHandler.class.getResourceAsStream("/version.html")), versionFile.toPath());
-            }
-            versionPage = FileUtils.readFileToString(versionFile, StandardCharsets.UTF_8);
-            if (!configFile.exists()) {
-                Files.copy(Objects.requireNonNull(HttpHandler.class.getResourceAsStream("/config.html")), configFile.toPath());
-            }
-            StringBuilder sb = new StringBuilder();
-            for (ProtocolVersion v : ProtocolVersionList.getProtocolsNewToOld()) {
-                sb.append(versionPage.replaceAll("VERSIONHERE", v.getName()));
-            }
-            configPage = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8).replaceAll("VERSIONSHERE", sb.toString());
             if (!authFile.exists()) {
                 Files.copy(Objects.requireNonNull(HttpHandler.class.getResourceAsStream("/auth.html")), authFile.toPath());
             }
             authPage = FileUtils.readFileToString(authFile, StandardCharsets.UTF_8);
-            if (!deleteFile.exists()) {
-                Files.copy(Objects.requireNonNull(HttpHandler.class.getResourceAsStream("/delete.html")), deleteFile.toPath());
-            }
-            deletePage = FileUtils.readFileToString(deleteFile, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
