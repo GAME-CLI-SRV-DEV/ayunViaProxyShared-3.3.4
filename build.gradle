@@ -7,8 +7,11 @@ version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    maven {
+        url "https://repo.viaversion.com/"
+          }
 }
 
 dependencies {
-    implementation(files('lib/ViaProxy-3.3.0-SNAPSHOT+java8.jar'))
+    implementation 'net.raphimc:ViaProxy:3.3.4-SNAPSHOT'
 }
