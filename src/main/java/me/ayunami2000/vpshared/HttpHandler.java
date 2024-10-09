@@ -41,12 +41,10 @@ public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         webFolder.mkdirs();
     }
 
-    private static final File captchaFile = new File(webFolder, "captcha.html");
     private static final File versionFile = new File(webFolder, "version.html");
     private static final File configFile = new File(webFolder, "config.html");
     private static final File authFile = new File(webFolder, "auth.html");
     private static final File deleteFile = new File(webFolder, "delete.html");
-    private static String captchaPage;
     private static String versionPage;
     private static String configPage;
     private static String authPage;
@@ -83,152 +81,113 @@ public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         }
     }
 
-    @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
-        if (req.headers().contains(HttpHeaderNames.CONNECTION) && req.headers().get(HttpHeaderNames.CONNECTION).toLowerCase().contains("upgrade") && req.headers().contains(HttpHeaderNames.UPGRADE) && req.headers().get(HttpHeaderNames.UPGRADE).toLowerCase().contains("websocket")) {
-            ctx.pipeline().remove(this);
-            ctx.pipeline().fireChannelRead(req.retain());
-            return;
+@Override
+protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
+    if (!req.headers().contains(HttpHeaderNames.HOST)) {
+        ctx.close();
+        return;
+    }
+    String host = req.headers().get(HttpHeaderNames.HOST).toLowerCase();
+    String portPart = "";
+    if (host.contains(":")) {
+        portPart = host.substring(host.lastIndexOf(':'));
+        host = host.substring(0, host.indexOf(':'));
+    }
+    String base = null;
+    for (String potentialBase : FunnyConfig.hostBases) {
+        if (host.equals(potentialBase) || (host.contains(".") && host.split("\\.", 2)[1].equals(potentialBase))) {
+            base = potentialBase;
+            break;
         }
-        if (!req.headers().contains(HttpHeaderNames.HOST)) {
-            ctx.close();
-            return;
-        }
-        String host = req.headers().get(HttpHeaderNames.HOST).toLowerCase();
-        String portPart = "";
-        if (host.contains(":")) {
-            portPart = host.substring(host.lastIndexOf(':'));
-            host = host.substring(0, host.indexOf(':'));
-        }
-        String base = null;
-        for (String potentialBase : FunnyConfig.hostBases) {
-            if (host.equals(potentialBase) || (host.contains(".") && host.split("\\.", 2)[1].equals(potentialBase))) {
-                base = potentialBase;
-                break;
-            }
-        }
-        if (base == null) {
-            ctx.close();
-            return;
-        }
-        ByteBuf bb = ctx.alloc().buffer();
-        if (host.equals(base)) {
-            if (req.method() == HttpMethod.POST) {
-                Map<String, String> params = parseQuery(new String(ByteBufUtil.getBytes(req.content()), StandardCharsets.UTF_8), 4);
-                if (params.containsKey("h-captcha-response")) {
-                    String key = params.get("h-captcha-response");
-                    if (check(key)) {
-                        String code;
-                        do {
-                            String uuid = UUID.randomUUID().toString().toLowerCase();
-                            code = uuid.substring(uuid.lastIndexOf('-') + 1);
-                        } while (Main.connMap.containsKey(code));
-                        Main.connMap.put(code, new Main.ConnInfo());
-                        bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + code + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                    } else {
-                        bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                    }
-                } else {
-                    bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                }
-            } else {
-                bb.writeCharSequence(captchaPage, StandardCharsets.UTF_8);
-            }
+    }
+    if (base == null) {
+        ctx.close();
+        return;
+    }
+    ByteBuf bb = ctx.alloc().buffer();
+    if (host.equals(base)) {
+        if (req.method() == HttpMethod.POST) {
+            Map<String, String> params = parseQuery(new String(ByteBufUtil.getBytes(req.content()), StandardCharsets.UTF_8), 4);
+            String code;
+            do {
+                String uuid = UUID.randomUUID().toString().toLowerCase();
+                code = uuid.substring(uuid.lastIndexOf('-') + 1);
+            } while (Main.connMap.containsKey(code));
+            Main.connMap.put(code, new Main.ConnInfo());
+            bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + code + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
         } else {
-            String key = host.split("\\.", 2)[0];
-            if (Main.connMap.containsKey(key)) {
-                Main.ConnInfo connInfo = Main.connMap.get(key);
-                if (req.method() == HttpMethod.POST) {
-                    Map<String, String> params = parseQuery(new String(ByteBufUtil.getBytes(req.content()), StandardCharsets.UTF_8), connInfo.host == null ? 7 : 3);
-                    if (connInfo.host == null && params.containsKey("username") && params.containsKey("host") && params.containsKey("port") && params.containsKey("version") && !params.get("host").isEmpty()) {
-                        connInfo.host = params.get("host");
-                        try {
-                            connInfo.port = Integer.parseInt(params.get("port"));
-                        } catch (NumberFormatException ignored) {}
-                        for (ProtocolVersion v : ProtocolVersionList.getProtocolsNewToOld()) {
-                            if (v.getName().equalsIgnoreCase(params.get("version"))) {
-                                connInfo.version = v;
-                                break;
-                            }
+            bb.writeCharSequence(captchaPage, StandardCharsets.UTF_8);
+        }
+    } else {
+        String key = host.split("\\.", 2)[0];
+        if (Main.connMap.containsKey(key)) {
+            Main.ConnInfo connInfo = Main.connMap.get(key);
+            if (req.method() == HttpMethod.POST) {
+                Map<String, String> params = parseQuery(new String(ByteBufUtil.getBytes(req.content()), StandardCharsets.UTF_8), connInfo.host == null ? 7 : 3);
+                if (connInfo.host == null && params.containsKey("username") && params.containsKey("host") && params.containsKey("port") && params.containsKey("version") && !params.get("host").isEmpty()) {
+                    connInfo.host = params.get("host");
+                    try {
+                        connInfo.port = Integer.parseInt(params.get("port"));
+                    } catch (NumberFormatException ignored) {}
+                    for (ProtocolVersion v : ProtocolVersionList.getProtocolsNewToOld()) {
+                        if (v.getName().equalsIgnoreCase(params.get("version"))) {
+                            connInfo.version = v;
+                            break;
                         }
-                        if (connInfo.host.startsWith("mc://")) { // ClassiCube Direct URL
+                    }
+                    if (connInfo.host.startsWith("mc://")) { // ClassiCube Direct URL
+                        final URI uri = new URI(connInfo.host);
+                        connInfo.host = uri.getHost();
+                        connInfo.port = uri.getPort();
+                        if (connInfo.port == -1) {
+                            connInfo.port = 25565;
+                        }
+                        final String[] path = uri.getPath().substring(1).split("/");
+                        if (path.length < 2) {
+                            connInfo.host = null;
+                            connInfo.port = 25565;
+                            bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + key + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
+                        } else {
+                            connInfo.userOptions = new UserOptions(path[1], new OfflineAccount(path[0]));
+                            bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
+                        }
+                    } else if (Main.hasEagUtils && (connInfo.host.toLowerCase().startsWith("ws://") || connInfo.host.toLowerCase().startsWith("wss://"))) {
+                        if (params.get("username").isEmpty()) {
+                            bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + key + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
+                        } else {
                             final URI uri = new URI(connInfo.host);
                             connInfo.host = uri.getHost();
                             connInfo.port = uri.getPort();
-
+                            final boolean secure = uri.getScheme().equalsIgnoreCase("wss");
                             if (connInfo.port == -1) {
-                                connInfo.port = 25565;
+                                connInfo.port = secure ? 443 : 80;
                             }
-
-                            final String[] path = uri.getPath().substring(1).split("/");
-                            if (path.length < 2) {
-                                connInfo.host = null;
-                                connInfo.port = 25565;
-                                bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + key + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                            } else {
-                                connInfo.userOptions = new UserOptions(path[1], new OfflineAccount(path[0]));
-                                bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
+                            connInfo.secureWs = secure;
+                            if (!uri.getPath().isEmpty()) {
+                                connInfo.wsPath = uri.getPath().substring(1);
                             }
-                        } else if (Main.hasEagUtils && (connInfo.host.toLowerCase().startsWith("ws://") || connInfo.host.toLowerCase().startsWith("wss://"))) {
-                            if (params.get("username").isEmpty()) {
-                                bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + key + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                            } else {
-                                final URI uri = new URI(connInfo.host);
-                                connInfo.host = uri.getHost();
-                                connInfo.port = uri.getPort();
-
-                                final boolean secure = uri.getScheme().equalsIgnoreCase("wss");
-
-                                if (connInfo.port == -1) {
-                                    connInfo.port = secure ? 443 : 80;
-                                }
-
-                                connInfo.secureWs = secure;
-                                if (!uri.getPath().isEmpty()) {
-                                    connInfo.wsPath = uri.getPath().substring(1);
-                                }
-                                // connInfo.eagxPass = null;
-
-                                connInfo.userOptions = new UserOptions(null, new OfflineAccount(params.get("username")));
-                                bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
-                            }
-                        } else if (params.get("username").isEmpty()) {
-                            Consumer<StepMsaDeviceCode.MsaDeviceCode> cb = msaDeviceCode -> {
-                                connInfo.auth = authPage.replaceAll("CODEHERE", msaDeviceCode.getUserCode());
-                                bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
-                                DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK, bb);
-                                resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html;charset=utf-8");
-                                ctx.writeAndFlush(resp).addListener(ChannelFutureListener.CLOSE);
-                            };
-                            if (connInfo.version.equals(BedrockProtocolVersion.bedrockLatest)) {
-                                connInfo.userOptions = new UserOptions(null, new BedrockAccount(MinecraftAuth.BEDROCK_DEVICE_CODE_LOGIN.getFromInput(MinecraftAuth.createHttpClient(), new StepMsaDeviceCode.MsaDeviceCodeCallback(cb))));
-                            } else {
-                                connInfo.userOptions = new UserOptions(null, new MicrosoftAccount(MinecraftAuth.JAVA_DEVICE_CODE_LOGIN.getFromInput(MinecraftAuth.createHttpClient(), new StepMsaDeviceCode.MsaDeviceCodeCallback(cb))));
-                            }
-                            return;
-                        } else {
                             connInfo.userOptions = new UserOptions(null, new OfflineAccount(params.get("username")));
                             bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
                         }
-                    } else if (connInfo.host == null) {
-                        bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + key + "." + base + portPart + "'\"/>", StandardCharsets.UTF_8);
-                    } else if (params.containsKey("host")) {
-                        bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
-                    } else {
-                        Main.connMap.remove(key);
-                        bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + base + portPart + "'\"/>", StandardCharsets.UTF_8);
+                    } else if (params.get("username").isEmpty()) {
+                        Consumer<StepMsaDeviceCode.MsaDeviceCode> cb = msaDeviceCode -> {
+                            connInfo.auth = authPage.replaceAll("CODEHERE", msaDeviceCode.getUserCode());
+                            bb.writeCharSequence(deletePage.replaceAll("AUTHHERE", connInfo.auth), StandardCharsets.UTF_8);
+                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK, bb);
+                            resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html;charset=utf-8");
+                            ctx.writeAndFlush(resp).addListener(ChannelFutureListener.CLOSE);
+                        };
+                        if (connInfo.version.equals(BedrockProtocolVersion.bedrockLatest)) {
+                            connInfo.userOptions = new UserOptions(null, new BedrockAccount(MinecraftAuth.BEDROCK_DEVICE_CODE_LOGIN.getFromInput(MinecraftAuth.createHttpClient(), new StepMsaDeviceCode.MsaDeviceCodeCallback(cb))));
+                        } else {
+                            connInfo.userOptions = new UserOptions(null, new MicrosoftAccount(MinecraftAuth.JAVA_DEVICE_CODE_LOGIN.getFromInput(MinecraftAuth.createHttpClient(), new StepMsaDeviceCode.MsaDeviceCodeCallback(cb))));
+                        }
                     }
-                } else if (req.method() == HttpMethod.GET) {
-                    bb.writeCharSequence(connInfo.host == null ? configPage : deletePage.replaceAll("CODEHERE", connInfo.auth), StandardCharsets.UTF_8);
                 }
-            } else {
-                bb.writeCharSequence("<meta http-equiv=\"refresh\" content=\"0;URL='//" + base + portPart + "'\"/>", StandardCharsets.UTF_8);
             }
         }
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK, bb);
-        resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html;charset=utf-8");
-        ctx.writeAndFlush(resp).addListener(ChannelFutureListener.CLOSE);
     }
+}
 
     private static boolean check(String key) {
         try {
